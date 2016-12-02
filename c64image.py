@@ -31,7 +31,7 @@ from PIL import Image
 p = argparse.ArgumentParser(description = 'Convert an image to a Commodore 64 multi-colour bitmap.')
 p.add_argument('input', help='The image file to read.')
 p.add_argument('output', help='Output filename.')
-p.add_argument('-f', '--format', help='Set the output file format S, H, or PRG. Default: S', default = 'S')
+p.add_argument('-f', '--format', help='Set the output file format S, H, KOA, GG or PRG. Default: S', default = 'S')
 p.add_argument('-b', '--background', help='Set the background colour 0-15. Default: Auto', default = False, type=int)
 p.add_argument('--id', help='Set the image ID in S or H files', default = 'image')
 args = p.parse_args()
@@ -45,7 +45,7 @@ if background != False and (background < 0 or background > 15):
     print("Invalid background colour " + str(background))
     exit()
 
-if out_format not in ('S', 'H', 'PRG'):
+if out_format not in ('S', 'H', 'KOA', 'GG', 'PRG'):
     p.print_usage()
     print("Invalid output format " + out_format)
     exit()
@@ -164,6 +164,38 @@ def write_bytes(name, data, cformat):
     
     return s
 
+# Koala Painter-style RLE compression
+def koala_rle(data):
+    
+    if len(data) == 0:
+        return bytes([])
+    
+    rle = 0
+    last = -1
+    compressed = []
+    
+    # Pad the end with a dummy byte to flush remaining RLE data
+    data += bytes([~data[-1] & 0xFF])
+    
+    for byte in data:
+        
+        if byte == last:
+            rle += 1
+            continue
+        
+        while (last != 0xFE and rle > 3) or (last == 0xFE and rle > 0):
+            compressed += [0xFE, last, min(0xFF, rle)]
+            rle -= min(0xFF, rle)
+        
+        while rle > 0:
+            compressed += [last]
+            rle -= 1
+        
+        last = byte
+        rle = 1
+    
+    return bytes(compressed)
+
 # Render the PIL image to the canvas
 for cy in range(0, 25):
     for cx in range(0, 40):
@@ -261,6 +293,12 @@ elif out_format == 'H':
     s += write_bytes(image_id + "_screen", screen_bytes, out_format) + "\n"
     s += write_bytes(image_id + "_colour", colour_bytes, out_format) + "\n"
     s = bytes(s, encoding='utf-8')
+
+elif out_format == 'KOA':
+    s = bytes([0x00, 0x60]) + bytes(bitmap_bytes) + bytes(screen_bytes) + bytes(colour_bytes) + bytes([background])
+
+elif out_format == 'GG':
+    s = bytes([0x00, 0x60]) + koala_rle(bytes(bitmap_bytes) + bytes(screen_bytes) + bytes(colour_bytes) + bytes([background]))
 
 elif out_format == 'PRG':
     # This string is the binary produced from the assembly program "showimg.s"
