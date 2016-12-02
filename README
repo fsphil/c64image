@@ -1,0 +1,11 @@
+
+c64image.py
+
+This small python script takes an image supported by Python Image Library
+and generates the best approximation in the Commodore 64's Multi-Colour
+Bitmap screen mode. It can output .s, .h or an executable .prg file.
+
+This version does not support dithering, and won't work well with photos.
+
+Created by Philip Heron <phil@sanslogic.co.uk>
+
